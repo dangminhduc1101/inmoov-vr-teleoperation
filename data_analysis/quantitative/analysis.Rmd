@@ -110,7 +110,7 @@ mean_data_difficulty <- grouped_data_difficulty %>%
 
 test_data_difficulty <- grouped_data_difficulty %>%
   group_by(trial_type) %>%
-  summarize(mc = mean(avg_completion_time), sdc = sd(avg_completion_time), mu = mean(avg_unstable_time), sdu = sd(avg_unstable_time))
+  summarize(mc = mean(avg_completion_time), sdc = sd(avg_completion_time), mu = mean(avg_unstable_time), sdu = sd(avg_unstable_time), mp = mean(avg_unstable_percentage), sdp = sd(avg_unstable_percentage))
 
 ggplot(mean_data_difficulty, aes(x = trial_type, y = m, fill = query_type, color = query_type)) +
   geom_bar(stat = "identity", width = 0.2, position = position_dodge(width = 0.2)) + 
