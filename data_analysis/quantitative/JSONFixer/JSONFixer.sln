@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.33214.272
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JSONFixer", "JSONFixer.csproj", "{7D39DB49-D95A-4442-BA37-D59B3516EF2C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7D39DB49-D95A-4442-BA37-D59B3516EF2C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D39DB49-D95A-4442-BA37-D59B3516EF2C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D39DB49-D95A-4442-BA37-D59B3516EF2C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D39DB49-D95A-4442-BA37-D59B3516EF2C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8675784A-E91E-4858-9EA2-53A5A4F7C78B}
+	EndGlobalSection
+EndGlobal

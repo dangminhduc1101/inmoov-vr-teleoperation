@@ -1,0 +1,19 @@
+# ignore bin and obj directories
+bin/
+obj/
+
+# ignore NuGet packages
+*.nupkg
+packages/
+
+# ignore Visual Studio files
+*.vs/
+*.suo
+*.user
+*.ncrunchsolution
+*.csproj.user
+*.sln.docstates
+
+# ignore build output
+[Bb]in/
+[Oo]bj/

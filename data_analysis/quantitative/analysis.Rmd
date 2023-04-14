@@ -1,0 +1,199 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(jsonlite)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(ez)
+library(stringr)
+```
+
+``` {r Load Data, include = FALSE}
+files.json <- list.files("data", pattern = ".json", full.names = TRUE)
+data <- lapply(files.json, fromJSON) %>% bind_rows()
+```
+
+``` {r Data Correction}
+corrected_data <- data %>%
+  rename(AccelerationRight = AcceleratationRight) %>%
+  group_by(Participant) %>%
+  mutate(unstable_time = lag(UnstableTime),
+         frames = ifelse(Participant > 10, 0, lag(Frames)),
+         velocity_left = ifelse(Participant > 10, 0, lag(VelocityLeft)),
+         velocity_right = ifelse(Participant > 10, 0, lag(VelocityRight)),
+         acceleration_left = ifelse(Participant > 10, 0, lag(AccelerationLeft)),
+         acceleration_right = ifelse(Participant > 10, 0, lag(AccelerationRight)),
+         jerk_left = ifelse(Participant > 10, 0, lag(JerkLeft)),
+         jerk_right = ifelse(Participant > 10, 0, lag(JerkRight))) %>%
+  replace_na(list(unstable_time = 0, 
+                  frames = 0, 
+                  velocity_left = 0, 
+                  velocity_right = 0,
+                  acceleration_left = 0,
+                  acceleration_right = 0,
+                  jerk_left = 0,
+                  jerk_right = 0)) %>%
+  mutate(unstable_time = UnstableTime - unstable_time,
+         frames = Frames - frames,
+         velocity_left = (VelocityLeft * Frames - velocity_left) / frames,
+         velocity_right = (VelocityRight * Frames - velocity_right) / frames,
+         acceleration_left = (AccelerationLeft * Frames - acceleration_left) / frames,
+         acceleration_right = (AccelerationRight * Frames - acceleration_right) / frames,
+         jerk_left = (JerkLeft * Frames - jerk_left) / frames,
+         jerk_right = (JerkRight * Frames - jerk_right) / frames) %>%
+  ungroup() %>%
+  select(-c(UnstableTime, Frames, contains("Left", ignore.case = FALSE), contains("Right", ignore.case = FALSE))) %>%
+  rename(id = Participant, start = StartingCondition, trial = Trial, cond = Condition, completed = Completed, complete_time = CompletionTime)
+
+valid_max_data <- data %>% 
+  filter(Participant > 10) %>%
+  rename(id = Participant, trial = Trial, cond = Condition, completed = Completed, complete_time = CompletionTime) %>%
+  select(id, trial, cond, completed, contains("Max")) %>%
+  rename(max_vel_right = MaxVelocityRight, max_vel_left = MaxVelocityLeft, max_acc_right = MaxAccelerationRight, max_acc_left = MaxAccelerationLeft, max_jerk_right = MaxJerkRight, max_jerk_left = MaxJerkLeft)
+```
+
+``` {r Completion Percentage}
+completion_data <- corrected_data %>%
+  group_by(cond, id) %>%
+  summarize(completion_rate = sum(completed) / n())
+
+completion_data_subjects <- completion_data %>%
+  group_by(id) %>%
+  summarize(completion_rate = mean(completion_rate)) %>%
+  summarize(m = mean(completion_rate), sd = sd(completion_rate), min = min(completion_rate), max = max(completion_rate))
+
+anova_completion <- ezANOVA(completion_data, dv = completion_rate, wid = id, within = cond)
+anova_completion$ANOVA
+```
+
+
+``` {r Completion Graph}
+completion_data_conditions <- completion_data %>%
+  group_by(cond) %>%
+  summarize(m = mean(completion_rate), sd = sd(completion_rate))
+
+ggplot(completion_data_conditions, aes(x = cond, y = m)) +
+  geom_bar(stat = "identity", width = 0.3, color = "black", fill = "lightblue") + 
+  geom_errorbar(aes(ymin = m - sd, ymax = m + sd), width = 0.1) +
+  labs(x = "Condition", y = "Completion Rate") +  
+  theme_bw()
+```
+
+``` {r Ensure Difficulty}
+grouped_data_difficulty <- corrected_data %>%
+  mutate(trial_type = if_else(trial < 5, "easy", "hard")) %>%
+  group_by(id, trial_type) %>%
+  summarize(avg_completion_time = mean(complete_time), 
+            avg_unstable_time = mean(unstable_time),
+            avg_unstable_percentage = sum(unstable_time)/sum(complete_time))
+
+difficulty_anova_completion <- ezANOVA(grouped_data_difficulty, dv = avg_completion_time, wid = id, within = trial_type)
+
+difficulty_anova_unstable <- ezANOVA(grouped_data_difficulty, dv = avg_unstable_time, wid = id, within = trial_type)
+
+difficulty_anova_percentage <- ezANOVA(grouped_data_difficulty, dv = avg_unstable_percentage, wid = id, within = trial_type)
+
+difficulty_anova_completion$ANOVA
+difficulty_anova_unstable$ANOVA
+difficulty_anova_percentage$ANOVA
+```
+
+``` {r Difficulty Graph}
+mean_data_difficulty <- grouped_data_difficulty %>%
+  group_by(trial_type) %>%
+  summarize(mc = mean(avg_completion_time), sdc = sd(avg_completion_time), mu = mean(avg_unstable_time), sdu = sd(avg_unstable_time)) %>%
+  pivot_longer(cols = -trial_type, names_to = "type", values_to = "value") %>% 
+  mutate(query_type = if_else(type == "mc" | type == "sdc", "Completion", "Unstable"),
+         value_type = if_else(type == "mc" | type == "mu", "m", "sd")) %>%
+  select(-type) %>%
+  pivot_wider(names_from = "value_type", values_from = "value")
+
+test_data_difficulty <- grouped_data_difficulty %>%
+  group_by(trial_type) %>%
+  summarize(mc = mean(avg_completion_time), sdc = sd(avg_completion_time), mu = mean(avg_unstable_time), sdu = sd(avg_unstable_time))
+
+ggplot(mean_data_difficulty, aes(x = trial_type, y = m, fill = query_type, color = query_type)) +
+  geom_bar(stat = "identity", width = 0.2, position = position_dodge(width = 0.2)) + 
+  geom_errorbar(aes(ymin = m - sd, ymax = m + sd), width = 0.08, color = "black", position = position_dodge(width = 0.2)) +
+  labs(x = "Trial Type", y = "Time (Seconds)", fill = "Analysis", color = "Analysis") +  
+  theme_bw()
+```
+
+``` {r Effect Analysis}
+grouped_data_anova <- corrected_data %>%
+  group_by(cond, id) %>%
+  summarize(avg_completion_time = mean(complete_time), 
+            avg_unstable_time = mean(unstable_time),
+            avg_velocity = mean((velocity_left + velocity_right) / 2), 
+            avg_acceleration = mean((acceleration_left + acceleration_right) / 2),
+            avg_jerk = mean((jerk_left + jerk_right)/2))
+
+completion_anova <- ezANOVA(grouped_data_anova, dv = avg_completion_time, wid = id, within = cond)
+
+unstable_anova <- ezANOVA(grouped_data_anova, dv = avg_unstable_time, wid = id, within = cond)
+
+
+vel_anova <- ezANOVA(grouped_data_anova, dv = avg_velocity, wid = id, within = cond)
+
+accel_anova <- ezANOVA(grouped_data_anova, dv = avg_acceleration, wid = id, within = cond)
+
+jerk_anova <- ezANOVA(grouped_data_anova, dv = avg_jerk, wid = id, within = cond)
+
+completion_anova$ANOVA
+unstable_anova$ANOVA
+vel_anova$ANOVA
+accel_anova$ANOVA
+jerk_anova$ANOVA
+```
+
+``` {r Effect Graph}
+grouped_data_graph <- grouped_data_anova %>%
+  group_by(cond) %>%
+  summarize(mc = mean(avg_completion_time), 
+            mu = mean(avg_unstable_time),
+            mv = mean(avg_velocity),
+            ma = mean(avg_acceleration),
+            mj = mean(avg_jerk),
+            sc = sd(avg_completion_time), 
+            su = sd(avg_unstable_time),
+            sv = sd(avg_velocity),
+            sa = sd(avg_acceleration),
+            sj = sd(avg_jerk))
+
+cu_data <- grouped_data_graph %>%
+  select(c("cond","mc", "mu", "sc", "su")) %>%
+  pivot_longer(cols = -cond, names_to = "type", values_to = "value") %>% 
+  mutate(query_type = if_else(type == "mc" | type == "sc", "Completion", "Unstable"),
+         value_type = if_else(type == "mc" | type == "mu", "m", "sd")) %>%
+  select(-type) %>%
+  pivot_wider(names_from = "value_type", values_from = "value")
+
+ggplot(cu_data, aes(x = cond, y = m, fill = query_type, color = query_type)) +
+  geom_bar(stat = "identity", width = 0.2, position = position_dodge(width = 0.2)) + 
+  geom_errorbar(aes(ymin = m - sd, ymax = m + sd), width = 0.08, color = "black", position = position_dodge(width = 0.2)) +
+  labs(x = "Condition", y = "Time (Seconds)", fill = "Analysis", color = "Analysis") +  
+  theme_bw()
+
+ggplot(grouped_data_graph %>% select(c("cond", "mv", "sv")), aes(x = cond, y = mv)) +
+  geom_bar(stat = "identity", width = 0.2, fill = "green") + 
+  geom_errorbar(aes(ymin = mv - sv, ymax = mv + sv), width = 0.08, color = "black") +
+  labs(x = "Condition", y = "Velocity (Meters/Second)") +  
+  theme_bw()
+
+ggplot(grouped_data_graph %>% select(c("cond", "ma", "sa")), aes(x = cond, y = ma)) +
+  geom_bar(stat = "identity", width = 0.2, fill = "yellow") + 
+  geom_errorbar(aes(ymin = ma - sa, ymax = ma + sa), width = 0.08, color = "black") +
+  labs(x = "Condition", y = expression("Velocity (m/s"^2*")")) +  
+  theme_bw()
+
+ggplot(grouped_data_graph %>% select(c("cond", "mj", "sj")), aes(x = cond, y = mj)) +
+  geom_bar(stat = "identity", width = 0.2, fill = "purple") + 
+  geom_errorbar(aes(ymin = mj - sj, ymax = mj + sj), width = 0.08, color = "black") +
+  labs(x = "Condition", y = expression("Velocity (m/s"^3*")")) +  
+  theme_bw()
+```
+
+
+
+
+
